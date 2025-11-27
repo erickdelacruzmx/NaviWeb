@@ -1,0 +1,10 @@
+# Desactivar políticas que bloquean Google Sign-In en localhost
+<IfModule mod_headers.c>
+	Header always unset Cross-Origin-Opener-Policy
+	Header always unset Cross-Origin-Embedder-Policy
+</IfModule>
+
+
+
+
+    
