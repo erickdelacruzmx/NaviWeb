@@ -1,0 +1,10 @@
+# Local and secret configs
+config/config_google_local.php
+.env
+.env.*
+# IDE/editor
+.vscode/
+*.code-workspace
+# OS files
+.DS_Store
+Thumbs.db

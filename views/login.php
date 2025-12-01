@@ -135,7 +135,7 @@
         // Inicializar Google Sign-In
         window.onload = function () {
             google.accounts.id.initialize({
-                client_id: 'REDACTED_GOOGLE_CLIENT_ID',
+                client_id: '810189190324-ujvt1ck5fn4frcegqhkfccjn6va44i9e.apps.googleusercontent.com',
                 callback: handleGoogleSignIn
             });
             google.accounts.id.renderButton(

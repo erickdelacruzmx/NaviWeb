@@ -102,7 +102,7 @@
         window.onload = function() {
             // Solo usar OAuth popup, sin FedCM
             tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: "REDACTED_GOOGLE_CLIENT_ID",
+                client_id: "810189190324-ujvt1ck5fn4frcegqhkfccjn6va44i9e.apps.googleusercontent.com",
                 scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
                 callback: (tokenResponse) => {
                     if (tokenResponse.access_token) {
