@@ -49,3 +49,20 @@ C:\xampp\php\php.exe -l C:\xampp\htdocs\NAVI\*.php
 
 - Para producción en Linux/Apache, mantener mayúsculas/minúsculas en rutas SVG como en `icons.css` (p. ej. `Libro.svg`).
 - Si faltan SVGs adicionales, reutilizamos iconos existentes hasta contar con los definitivos.
+
+## Configuración de Google OAuth
+
+Los secretos no deben estar en el repositorio.
+
+- Crea `config/config_google_local.php` copiando desde `config/config_google_local.example.php` y coloca tus credenciales:
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `GOOGLE_REDIRECT_URI`
+  Este archivo ya está ignorado por `.gitignore`.
+
+- Alternativamente, define variables de entorno en el servidor:
+  - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+
+- El frontend usa `GOOGLE_CLIENT_ID` inyectado por `config/config_google.php` en `views/login.php` y `views/registro.php`.
+
+- Si alguna vez se expone un secreto, rota el `Client Secret` en Google Cloud Console y limpia el historial con BFG.
