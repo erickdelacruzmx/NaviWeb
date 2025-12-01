@@ -1,6 +1,8 @@
 <?php
     // La sesión ya fue iniciada por el controlador
     // $registro_errors viene del controlador si hay errores
+    // Cargar config Google
+    require_once __DIR__ . '/../config/config_google.php';
 ?>
 
 <!DOCTYPE html>
@@ -100,9 +102,13 @@
         let tokenClient;
         
         window.onload = function() {
+            const GOOGLE_CLIENT_ID = "<?php echo htmlspecialchars(defined('GOOGLE_CLIENT_ID') ? GOOGLE_CLIENT_ID : '', ENT_QUOTES, 'UTF-8'); ?>";
+            if (!GOOGLE_CLIENT_ID) {
+                console.warn('GOOGLE_CLIENT_ID vacío: define env vars o config_google_local.php');
+            }
             // Solo usar OAuth popup, sin FedCM
             tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: "810189190324-ujvt1ck5fn4frcegqhkfccjn6va44i9e.apps.googleusercontent.com",
+                client_id: GOOGLE_CLIENT_ID,
                 scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
                 callback: (tokenResponse) => {
                     if (tokenResponse.access_token) {
