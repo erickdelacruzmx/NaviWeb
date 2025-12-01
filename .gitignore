@@ -2,6 +2,7 @@
 config/config_google_local.php
 .env
 .env.*
+bfg-replacements.txt
 # IDE/editor
 .vscode/
 *.code-workspace
