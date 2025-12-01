@@ -5,10 +5,10 @@
 //    define('GOOGLE_CLIENT_ID', '...');
 //    define('GOOGLE_CLIENT_SECRET', '...');
 //    define('GOOGLE_REDIRECT_URI', 'http://localhost/NaviWeb/auth_google.php');
-//    ?>
 // 2) O define variables de entorno: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
+//    
 
-// Cargar override local si existe (ignorado por git)
+//Cargar override local si existe (ignorado por git)
 if (file_exists(__DIR__ . '/config_google_local.php')) {
 	require __DIR__ . '/config_google_local.php';
 } else {
