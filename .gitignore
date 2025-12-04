@@ -1,5 +1,6 @@
 # Local and secret configs
 config/config_google_local.php
+config/config_gemini_local.php
 .env
 .env.*
 bfg-replacements.txt

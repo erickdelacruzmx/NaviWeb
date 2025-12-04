@@ -259,8 +259,6 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                     <select class="w-full border border-gray-300 rounded-xl px-3 md:px-4 py-2 md:py-3 focus:outline-none focus:ring-2 focus:ring-navi-blue">
                         <option>Español</option>
                         <option>English</option>
-                        <option>Français</option>
-                        <option>Português</option>
                     </select>
                 </div>
                 <div class="bg-white rounded-2xl shadow p-6 lg:p-8">
@@ -383,6 +381,38 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
             <p class="text-gray-600 text-center text-base md:text-lg lg:text-xl max-w-xl px-4 leading-relaxed flex-shrink-0">
                 {{ naviMessage }}
             </p>
+            
+            <!-- Chat Input - SOLO EN MODO NAVICITO -->
+            <div v-if="currentMode === 'navicito'" class="w-full max-w-md px-4 flex-shrink-0 mb-4 md:mb-6">
+                <div class="flex gap-2">
+                    <input 
+                        v-model="navichatInput"
+                        @keyup.enter="sendMessageToNavi"
+                        type="text"
+                        placeholder="Pregunta a Navi..."
+                        :disabled="navichatLoading"
+                        class="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navi-blue focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
+                        aria-label="Mensaje para Navi">
+                    <button 
+                        @click="sendMessageToNavi"
+                        :disabled="navichatLoading || !navichatInput.trim()"
+                        class="px-5 py-3 bg-navi-blue text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        :aria-busy="navichatLoading"
+                        title="Enviar mensaje a Navi">
+                        <i :class="navichatLoading ? 'fas fa-spinner fa-spin' : 'fas fa-send'"></i>
+                    </button>
+                </div>
+                <p v-if="navichatError" class="text-red-500 text-sm mt-2 text-center">{{ navichatError }}</p>
+            </div>
+            
+            <!-- Historial de chat compacto (últimos 5 mensajes) -->
+            <div v-if="currentMode === 'navicito' && navichatHistory.length > 0" class="w-full max-w-md px-4 flex-shrink-0 mb-4 bg-gray-50 rounded-lg p-4 max-h-32 overflow-y-auto border border-gray-200">
+                <div v-for="(msg, idx) in navichatHistory.slice(-5)" :key="idx" class="mb-3 text-xs md:text-sm">
+                    <span v-if="msg.role === 'user'" class="font-semibold text-navi-blue">Tú:</span>
+                    <span v-else class="font-semibold text-green-600">Navi:</span>
+                    <p class="text-gray-700 mt-1">{{ msg.content }}</p>
+                </div>
+            </div>
         </div>
 
         <!-- ============================================
@@ -715,6 +745,15 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                 isPulsing: false,
                 naviMessage: 'Hola, ¿en qué puedo ayudarte hoy?',
                 
+                // Chat con Gemini
+                navichatEnabled: true,
+                navichatLoading: false,
+                navichatInput: '',
+                navichatHistory: [],
+                navichatError: null,
+                navichatMaxHistory: 10,
+                navichatAbortController: null,
+                
                 juegos: {
                     habilidadComunicativa: Array(8).fill(null).map(() => ({ content: '', editing: false, originalContent: '' })),
                     exploracionAuditiva: Array(6).fill(null).map(() => ({ content: '', editing: false, originalContent: '' })),
@@ -768,6 +807,107 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                     this.isTalking = false;
                     this.naviMessage = 'Hola, ¿en qué puedo ayudarte hoy?';
                 }, 3000);
+            },
+            
+            /**
+             * Enviar mensaje a NAVI vía Gemini API
+             */
+            async sendMessageToNavi() {
+                const message = this.navichatInput.trim();
+                if (!message || this.navichatLoading) return;
+                
+                // Agregar mensaje del usuario al historial
+                this.navichatHistory.push({
+                    role: 'user',
+                    content: message
+                });
+                
+                // Limpiar input y mostrar loading
+                this.navichatInput = '';
+                this.navichatLoading = true;
+                this.isPulsing = true;
+                this.isTalking = true;
+                this.navichatError = null;
+                
+                try {
+                    // Preparar payload
+                    const payload = {
+                        message: message,
+                        history: this.navichatHistory.slice(-this.navichatMaxHistory)
+                    };
+                    
+                    // Crear AbortController para permitir cancelar
+                    this.navichatAbortController = new AbortController();
+                    
+                    // Llamar backend
+                    const response = await fetch('/NaviWeb/api/navi-chat.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload),
+                        signal: this.navichatAbortController.signal
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Error desconocido');
+                    }
+                    
+                    // Agregar respuesta de NAVI al historial
+                    const naviResponse = data.response;
+                    this.navichatHistory.push({
+                        role: 'assistant',
+                        content: naviResponse
+                    });
+                    
+                    // Mostrar respuesta en el avatar
+                    this.naviMessage = naviResponse;
+                    
+                } catch (error) {
+                    // Si fue cancelado por el usuario, no mostrar error
+                    if (error.name === 'AbortError') {
+                        this.navichatError = 'Solicitud cancelada';
+                    } else {
+                        console.error('Error en chat:', error);
+                        this.navichatError = 'No pude procesar tu mensaje. Intenta de nuevo.';
+                        this.naviMessage = this.navichatError;
+                    }
+                } finally {
+                    this.navichatLoading = false;
+                    this.isTalking = false;
+                    
+                    // Quitar pulso después de 5 segundos
+                    setTimeout(() => {
+                        this.isPulsing = false;
+                    }, 5000);
+                }
+            },
+            
+            /**
+             * Cancelar solicitud en progreso
+             */
+            cancelNaviChat() {
+                if (this.navichatAbortController) {
+                    this.navichatAbortController.abort();
+                }
+                this.navichatLoading = false;
+                this.isPulsing = false;
+                this.isTalking = false;
+            },
+            
+            /**
+             * Limpiar historial de chat
+             */
+            clearNaviHistory() {
+                this.navichatHistory = [];
+                this.navichatError = null;
+                this.naviMessage = 'Hola, ¿en qué puedo ayudarte hoy?';
             },
             
             changeSection(section) {
