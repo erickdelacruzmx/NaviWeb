@@ -384,12 +384,63 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
             
             <!-- Chat Input - SOLO EN MODO NAVICITO -->
             <div v-if="currentMode === 'navicito'" class="w-full max-w-md px-4 flex-shrink-0 mb-4 md:mb-6">
+                <!-- Controles de Voz -->
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <!-- Botón de micrófono (STT) -->
+                    <button 
+                        v-if="voiceRecognitionSupported"
+                        @click="startVoiceRecognition"
+                        :disabled="voiceRecognitionListening || navichatLoading"
+                        class="px-4 py-3 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        title="Hablar con Navi (micrófono)"
+                        aria-label="Iniciar reconocimiento de voz">
+                        <i :class="voiceRecognitionListening ? 'fas fa-circle fa-pulse' : 'fas fa-microphone'"></i>
+                        <span v-if="!voiceRecognitionListening">Hablar</span>
+                        <span v-else>Escuchando...</span>
+                    </button>
+                    
+                    <!-- Botón detener entrada de voz -->
+                    <button 
+                        v-if="voiceRecognitionListening"
+                        @click="stopVoiceRecognition"
+                        class="px-3 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+                        title="Detener micrófono"
+                        aria-label="Detener reconocimiento de voz">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                    
+                    <!-- Botón detener audio de respuesta -->
+                    <button 
+                        v-if="voiceSpeaking"
+                        @click="stopSpeaking"
+                        class="px-3 py-3 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600 transition-colors"
+                        title="Detener a Navi"
+                        aria-label="Detener síntesis de voz">
+                        <i class="fas fa-stop-circle"></i>
+                    </button>
+                    
+                    <!-- Control de volumen -->
+                    <div v-if="voiceSynthesisSupported" class="flex items-center gap-2 px-3 py-3 bg-gray-100 rounded-lg">
+                        <i class="fas fa-volume-up text-gray-600"></i>
+                        <input 
+                            v-model.number="voiceVolume" 
+                            type="range" 
+                            min="0" 
+                            max="1" 
+                            step="0.1"
+                            class="w-20 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                            title="Volumen de Navi"
+                            aria-label="Control de volumen">
+                    </div>
+                </div>
+                
+                <!-- Input de texto (alternativa) -->
                 <div class="flex gap-2">
                     <input 
                         v-model="navichatInput"
                         @keyup.enter="sendMessageToNavi"
                         type="text"
-                        placeholder="Pregunta a Navi..."
+                        :placeholder="voiceRecognitionListening ? 'Escuchando...' : 'O escribe tu pregunta...'"
                         :disabled="navichatLoading"
                         class="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navi-blue focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
                         aria-label="Mensaje para Navi">
@@ -398,11 +449,20 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                         :disabled="navichatLoading || !navichatInput.trim()"
                         class="px-5 py-3 bg-navi-blue text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                         :aria-busy="navichatLoading"
-                        title="Enviar mensaje a Navi">
+                        title="Enviar mensaje a Navi"
+                        aria-label="Enviar mensaje">
                         <i :class="navichatLoading ? 'fas fa-spinner fa-spin' : 'fas fa-send'"></i>
                     </button>
                 </div>
-                <p v-if="navichatError" class="text-red-500 text-sm mt-2 text-center">{{ navichatError }}</p>
+                
+                <!-- Mensajes de estado -->
+                <p v-if="voiceRecognitionError" class="text-red-500 text-sm mt-2 text-center">⚠️ {{ voiceRecognitionError }}</p>
+                <p v-if="navichatError" class="text-red-500 text-sm mt-2 text-center">⚠️ {{ navichatError }}</p>
+                
+                <!-- Indicador de soporte de voz -->
+                <p v-if="!voiceRecognitionSupported && !voiceSynthesisSupported" class="text-gray-500 text-xs mt-2 text-center">
+                    💡 Usa Chrome, Edge o Safari para habilitar voz
+                </p>
             </div>
             
             <!-- Historial de chat compacto (últimos 5 mensajes) -->
@@ -754,6 +814,26 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                 navichatMaxHistory: 10,
                 navichatAbortController: null,
                 
+                // Voz - Entrada (micrófono)
+                voiceRecognitionSupported: false,
+                voiceRecognitionActive: false,
+                voiceRecognitionListening: false,
+                voiceRecognitionText: '',
+                voiceRecognitionError: null,
+                voiceRecognition: null,
+                voiceBrowserSupport: 'Verificando...',
+                
+                // Voz - Salida (altavoz)
+                voiceSynthesisSupported: false,
+                voiceSynthesisPlaying: false,
+                voiceSpeaking: false,
+                voiceVolume: 1,
+                voiceRate: 0.9,
+                voicePitch: 1,
+                selectedVoice: 0,
+                availableVoices: [],
+                voiceSynthesis: null,
+                
                 juegos: {
                     habilidadComunicativa: Array(8).fill(null).map(() => ({ content: '', editing: false, originalContent: '' })),
                     exploracionAuditiva: Array(6).fill(null).map(() => ({ content: '', editing: false, originalContent: '' })),
@@ -869,6 +949,11 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                     // Mostrar respuesta en el avatar
                     this.naviMessage = naviResponse;
                     
+                    // ✨ NUEVO: Hacer que Navi hable la respuesta por voz
+                    if (this.voiceSynthesisSupported) {
+                        this.speakResponse(naviResponse);
+                    }
+                    
                 } catch (error) {
                     // Si fue cancelado por el usuario, no mostrar error
                     if (error.name === 'AbortError') {
@@ -908,6 +993,172 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
                 this.navichatHistory = [];
                 this.navichatError = null;
                 this.naviMessage = 'Hola, ¿en qué puedo ayudarte hoy?';
+            },
+            
+            // ============= MÉTODOS DE VOZ =============
+            
+            /**
+             * Inicializar reconocimiento de voz (entrada)
+             */
+            initializeVoiceRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    this.voiceRecognitionSupported = false;
+                    this.voiceBrowserSupport = 'Tu navegador no soporta voz';
+                    return;
+                }
+                
+                this.voiceRecognition = new SpeechRecognition();
+                this.voiceRecognition.lang = 'es-ES';
+                this.voiceRecognition.continuous = false;
+                this.voiceRecognition.interimResults = true;
+                
+                this.voiceRecognition.onstart = () => {
+                    this.voiceRecognitionListening = true;
+                    this.voiceRecognitionError = null;
+                };
+                
+                this.voiceRecognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            this.voiceRecognitionText += transcript + ' ';
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    // Mostrar texto provisional mientras habla
+                    if (interimTranscript) {
+                        this.navichatInput = this.voiceRecognitionText + interimTranscript;
+                    }
+                };
+                
+                this.voiceRecognition.onerror = (event) => {
+                    this.voiceRecognitionError = `Error de voz: ${event.error}`;
+                };
+                
+                this.voiceRecognition.onend = () => {
+                    this.voiceRecognitionListening = false;
+                    // Enviar automáticamente si hay texto reconocido
+                    if (this.voiceRecognitionText.trim()) {
+                        this.navichatInput = this.voiceRecognitionText.trim();
+                        // Pequeño delay para que el usuario vea el texto
+                        setTimeout(() => {
+                            this.sendMessageToNavi();
+                        }, 500);
+                        this.voiceRecognitionText = '';
+                    }
+                };
+                
+                this.voiceRecognitionSupported = true;
+                this.voiceBrowserSupport = '✅ Voz activada';
+            },
+            
+            /**
+             * Inicializar síntesis de voz (salida)
+             */
+            initializeVoiceSynthesis() {
+                const synthesis = window.speechSynthesis;
+                if (!synthesis) {
+                    this.voiceSynthesisSupported = false;
+                    return;
+                }
+                
+                this.voiceSynthesis = synthesis;
+                
+                // Cargar voces disponibles
+                const loadVoices = () => {
+                    this.availableVoices = synthesis.getVoices();
+                    // Seleccionar voz en español si existe
+                    this.selectedVoice = this.availableVoices.findIndex(v => 
+                        v.lang.startsWith('es')
+                    );
+                    if (this.selectedVoice === -1) {
+                        this.selectedVoice = 0; // Fallback a primera voz
+                    }
+                };
+                
+                loadVoices();
+                synthesis.onvoiceschanged = loadVoices;
+                
+                this.voiceSynthesisSupported = true;
+            },
+            
+            /**
+             * Iniciar escucha de voz
+             */
+            startVoiceRecognition() {
+                if (!this.voiceRecognitionSupported) {
+                    this.voiceRecognitionError = 'Tu navegador no soporta reconocimiento de voz';
+                    return;
+                }
+                
+                this.voiceRecognitionText = '';
+                this.navichatInput = '';
+                this.voiceRecognition.start();
+            },
+            
+            /**
+             * Detener escucha de voz
+             */
+            stopVoiceRecognition() {
+                if (this.voiceRecognition) {
+                    this.voiceRecognition.abort();
+                    this.voiceRecognitionListening = false;
+                }
+            },
+            
+            /**
+             * Hacer que Navi hable una respuesta
+             */
+            speakResponse(text) {
+                if (!this.voiceSynthesisSupported) {
+                    console.warn('Síntesis de voz no soportada');
+                    return;
+                }
+                
+                // Cancelar cualquier audio anterior
+                this.voiceSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'es-ES';
+                utterance.rate = this.voiceRate;  // 0.9 (más lento, más claro)
+                utterance.pitch = this.voicePitch;
+                utterance.volume = this.voiceVolume;
+                
+                if (this.availableVoices.length > this.selectedVoice) {
+                    utterance.voice = this.availableVoices[this.selectedVoice];
+                }
+                
+                utterance.onstart = () => {
+                    this.voiceSpeaking = true;
+                    this.voiceSynthesisPlaying = true;
+                    this.isTalking = true;
+                };
+                
+                utterance.onend = () => {
+                    this.voiceSpeaking = false;
+                    this.voiceSynthesisPlaying = false;
+                    this.isTalking = false;
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Error en síntesis de voz:', event.error);
+                };
+                
+                this.voiceSynthesis.speak(utterance);
+            },
+            
+            /**
+             * Detener audio actual
+             */
+            stopSpeaking() {
+                if (this.voiceSynthesis) {
+                    this.voiceSynthesis.cancel();
+                    this.voiceSpeaking = false;
+                    this.isTalking = false;
+                }
             },
             
             changeSection(section) {
@@ -1196,6 +1447,10 @@ $app_user_email = $_SESSION['user_email'] ?? 'usuario@ejemplo.com';
             this.biblioteca.canciones = this.initializeLibraryData(initialSongs, 'canciones');
             this.biblioteca.cuentos = this.initializeLibraryData(initialStories, 'cuentos');
             this.biblioteca.sonidosdelmundo = this.initializeLibraryData(initialSounds, 'sonidosdelmundo');
+            
+            // Inicializar voz entrada y salida
+            this.initializeVoiceRecognition();
+            this.initializeVoiceSynthesis();
         }
     }).mount('#app');
     </script>
