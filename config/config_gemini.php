@@ -7,8 +7,12 @@
 //    
 
 // Cargar override local si existe (ignorado por git)
-if (file_exists(__DIR__ . '/config_gemini_local.php')) {
-	require __DIR__ . '/config_gemini_local.php';
+$local_config_path = __DIR__ . '/config_gemini_local.php';
+if (file_exists($local_config_path)) {
+	$local_config = require $local_config_path;
+	if (is_array($local_config) && isset($local_config['GEMINI_API_KEY'])) {
+		define('GEMINI_API_KEY', $local_config['GEMINI_API_KEY']);
+	}
 } else {
 	// Cargar desde variable de entorno o usar valor vacío
 	if (!defined('GEMINI_API_KEY')) {
@@ -28,6 +32,8 @@ if (empty(GEMINI_API_KEY)) {
 define('GEMINI_MODEL', 'gemini-pro');
 define('GEMINI_TEMPERATURE', 0.7);
 define('GEMINI_MAX_TOKENS', 150);
+define('GEMINI_TOP_P', 0.9);
+define('GEMINI_TOP_K', 40);
 define('GEMINI_TOP_P', 0.9);
 define('GEMINI_TOP_K', 40);
 ?>
